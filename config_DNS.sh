@@ -76,7 +76,8 @@ read ipad
 echo "Introduza o listen port IPV4 no formato de  "
 IFS='.' read -r domi1 domi2 <<< "$domin"
 IFS='.' read -r oct1 oct2 oct3 oct4 <<< "$netw"
-sudo > /etc/named.conf
+sudo touch /etc/named.conf
+sudo tee /etc/named.conf < /dev/null
 sudo /etc/named.conf <<EOF
 //
 // named.conf
@@ -140,8 +141,10 @@ include "/etc/named.root.key";
 }
 EOF
 IFS='.' read -r ioct1 ioct2 ioct3 ioct4 <<< "$ipad"
-sudo > /var/named/$domin.db
-sudo > /var/named/$ioct3.$ioct2.$ioct1.db
+sudo touch /var/named/$domin.db
+sudo tee /var/named/$domin.db < /dev/null
+sudo touch /var/named/$ioct3.$ioct2.$ioct1.db
+sudo tee /var/named/$ioct3.$ioct2.$ioct1.db < /dev/null
 sudo /var/named/$domin.db <<EOF
 $TTL 86400 ; Tempo de vida padrão (1 dia)
 @   IN  SOA     ns.$domin. root.$domin. (
