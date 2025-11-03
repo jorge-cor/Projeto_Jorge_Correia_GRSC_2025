@@ -10,26 +10,34 @@ oct1=""
 oct2=""
 oct3=""
 oct4=""
+ioct1=""
+ioct2=""
+ioct3=""
+ioct4=""
 domin=""
 domi1=""
 domi2=""
 opcao=0
+soct=""
+poct=""
 reset='\e[0m'
 azul='\e[34m'
 verde='\e[32m'
 amarelo='\e[33m'
 vermelho='\e[31m'
 nmcli
-while [ $opcao -ne 7 ]; do
+while [ $opcao -ne 6 ]; do
 
 echo -e "${verde}------------------ Menu Principal ------------------${reset}"
 echo "1. Definir IP estatico"
-echo "2. Atualizar sistema e instalar servidor DNS"
+echo "2. Atualizar sistema e instalar servidor DNS(BLIND)"
 echo "3. Configurar DNS"
-echo "4. Sair"
+echo "4. Ablitar o serviço"
+echo "5. Defenir entradas no DNS server(bind)"
+echo "6. Sair"
 echo -e "${verde}-----------------------------------------------------${reset}"
 
-printf "Escolha uma opção (1-7): "
+printf "Escolha uma opção (1-6): "
 read opcao
 
 case $opcao in
@@ -62,7 +70,6 @@ sudo firewall-cmd --reload
 ;;
 3)
 echo -e "${azul}A executar a Opção 3...${reset}"
-
 echo "Criar acl ex: (internal-network)"
 read acl
 echo "Introduza a network da rede no formato 192.168.1.0 "
@@ -71,14 +78,39 @@ echo "Introduza a Mascara da rede no formato de 8 a 32 "
 read mask
 echo "Introduza o Nome de dominio no formato de exemplo.pt "
 read domin
-echo "Introduza o IP da maquina no formato 192.168.1.1/24 "
+echo "Introduza o IP da maquina no formato 192.168.1.1 "
 read ipad
-echo "Introduza o listen port IPV4 no formato de  "
+IFS='.' read -r ioct1 ioct2 ioct3 ioct4 <<< "$ipad"
 IFS='.' read -r domi1 domi2 <<< "$domin"
 IFS='.' read -r oct1 oct2 oct3 oct4 <<< "$netw"
+if [[ ! "$mask" =~ ^[0-9]+$ ]]; then
+    echo "Erro: O prefixo '$mask' não é um número."
+    
+elif [ "$mask" -le 16 ]; then
+    # "se ate 16"
+    echo "LOG: Prefixo ($mask) é <= 16."
+    soct="${ioct4}.${ioct3}.${ioct2}"
+    poct="${ioct1}"
+
+elif [ "$mask" -le 24 ]; then
+    # "se ate 24" (implica que é > 16)
+    echo "LOG: Prefixo ($mask) é > 16 e <= 24."
+    soct="${ioct4}.${ioct3}"
+    poct="${ioct2}.${ioct1}"
+
+elif [ "$mask" -le 32 ]; then
+    # "se ate 32" (implica que é > 24)
+    echo "LOG: Prefixo ($mask) é > 24 e <= 32."
+    soct="${ioct4}"
+    poct="${ioct3}.${ioct2}.${ioct1}"
+
+else
+    echo "Erro: Prefixo '$mask' é inválido (maior que 32)."
+    soct="INVALIDO"
+fi
 sudo touch /etc/named.conf
 sudo tee /etc/named.conf < /dev/null
-sudo /etc/named.conf <<EOF
+sudo tee /etc/named.conf <<EOF
 //
 // named.conf
 //
@@ -111,6 +143,11 @@ options {
            attacks. Implementing BCP38 within your network would greatly
            reduce such attack surface
         */
+        forwarders {
+        8.8.8.8;    // Google DNS
+        1.1.1.1;    // Cloudflare
+        };
+        forward only;
         recursion yes;
         dnssec-validation yes;
         managed-keys-directory "/var/named/dynamic";
@@ -138,15 +175,15 @@ zone "$oct3.$oct2.$oct1.in.addr.arpa" IN {
 };
 include "/etc/named.rfc1912.zones";
 include "/etc/named.root.key";
-}
 EOF
-IFS='.' read -r ioct1 ioct2 ioct3 ioct4 <<< "$ipad"
+sudo chown root:named /etc/named.conf
+sudo chmod 640 /etc/named.conf
 sudo touch /var/named/$domin.db
 sudo tee /var/named/$domin.db < /dev/null
 sudo touch /var/named/$ioct3.$ioct2.$ioct1.db
 sudo tee /var/named/$ioct3.$ioct2.$ioct1.db < /dev/null
-sudo /var/named/$domin.db <<EOF
-$TTL 86400 ; Tempo de vida padrão (1 dia)
+sudo tee /var/named/$domin.db <<EOF
+\\$TTL 86400 ; Tempo de vida padrão (1 dia)
 @   IN  SOA     ns.$domin. root.$domin. (
             2024102401  ; Serial (data de hoje + versão)
             3600        ; Refresh (1 hora)
@@ -161,11 +198,10 @@ $TTL 86400 ; Tempo de vida padrão (1 dia)
 ; Registos de Endereço (A)
 ns         IN  A       $ipad  ; O próprio servidor DNS
 
-}
 EOF
 
-sudo /var/named/$ioct3.$ioct2.$ioct1.db <<EOF
-TTL 86400 ; Tempo de vida padrão (1 dia)
+sudo tee /var/named/$poct.db <<EOF
+\\$TTL 86400 ; Tempo de vida padrão (1 dia)
 @   IN  SOA     ns.$domin. root.$domin. (
             2024102401  ; Serial (o mesmo da zona direta, por conveniência)
             3600        ; Refresh (1 hora)
@@ -180,16 +216,17 @@ TTL 86400 ; Tempo de vida padrão (1 dia)
 
 ; 
 ; REGISTOS PTR (OS REGISTOS INVERSOS)
-; O "$ioct3.$ioct2.$ioct1.in-addr.arpa" já está implícito pelo nome da zona.
+; O "$poct.in-addr.arpa" já está implícito pelo nome da zona.
 ;
 
 ; IP $ipad -> ns.$domin.
-$ioct4  IN  PTR     ns.$domin.
+$soct  IN  PTR     ns.$domin.
 
-}
 EOF
+sudo chown -R named:named /var/named/
 ;;
 4)
+echo -e "${azul}A executar a Opção 4...${reset}"
 sudo systemctl start named
 sudo systemctl enable named
 echo -e "${amarelo}Status do DNS server(BIND)...${reset}"
@@ -198,10 +235,14 @@ echo -e "\n${verde}Prima ENTER para continuar...${rese}"
 read PAUSA
 ;;
 5)
+echo -e "${azul}A executar a Opção 5...${reset}"
+echo ""
+;;
+6)
 echo -e "${vermelho}A sair do menu. Até breve!${reset}"
 ;;
 *)
-echo "Opção inválida. Por favor, escolha um número entre 1 e 7."
+echo "Opção inválida. Por favor, escolha um número entre 1 e 6."
 opcao=0
 ;;
 esac
