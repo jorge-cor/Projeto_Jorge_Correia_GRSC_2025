@@ -108,6 +108,8 @@ else
     echo "Erro: Prefixo '$mask' é inválido (maior que 32)."
     soct="INVALIDO"
 fi
+echo -e "\n${verde}Prima ENTER para continuar...${rese}"
+read PAUSA
 sudo touch /etc/named.conf
 sudo tee /etc/named.conf < /dev/null
 sudo tee /etc/named.conf <<EOF
@@ -164,13 +166,13 @@ logging {
         };
 };
 zone "$domi1" IN {
-        type primary;
+        type master;
         file "$domin.db";
         allow-update { none; };
 };
-zone "$oct3.$oct2.$oct1.in.addr.arpa" IN {
-        type primary;
-        file "$oct3.$oct2.$oct1.db";
+zone "$poct.in-addr.arpa" IN {
+        type master;
+        file "$poct.db";
         allow-update {none; };
 };
 include "/etc/named.rfc1912.zones";
@@ -201,25 +203,17 @@ ns         IN  A       $ipad  ; O próprio servidor DNS
 EOF
 
 sudo tee /var/named/$poct.db <<EOF
-\\$TTL 86400 ; Tempo de vida padrão (1 dia)
-@   IN  SOA     ns.$domin. root.$domin. (
-            2024102401  ; Serial (o mesmo da zona direta, por conveniência)
-            3600        ; Refresh (1 hora)
-            1800        ; Retry (30 minutos)
-            604800      ; Expire (1 semana)
-            86400       ; Minimum TTL (1 dia)
-)
+\\$TTL 86400 ; 
+@   IN  SOA   ns.$domin. root.$domin. (
+        2025110301 ; Serial 
+        3H         ; Refresh
+        15M        ; Retry
+        1W         ; Expire
+        1D )       ; Minimum TTL
 
-; Servidor de Nomes (NS)
-; Aponta para o nome do servidor DNS
+
 @   IN  NS      ns.$domin.
 
-; 
-; REGISTOS PTR (OS REGISTOS INVERSOS)
-; O "$poct.in-addr.arpa" já está implícito pelo nome da zona.
-;
-
-; IP $ipad -> ns.$domin.
 $soct  IN  PTR     ns.$domin.
 
 EOF
