@@ -43,6 +43,7 @@ read opcao
 case $opcao in
 1)
 echo -e "${azul}A executar a Opção 1...${reset}"
+nmcli connection show
 echo "Coloque a interface :"
 read inter
 echo "Introduza o IP da maquina no formato 192.168.1.1/24 "
@@ -80,6 +81,9 @@ echo "Introduza o Nome de dominio no formato de exemplo.pt "
 read domin
 echo "Introduza o IP da maquina no formato 192.168.1.1 "
 read ipad
+nmcli connection show
+echo "Coloque a interface :"
+read inter
 IFS='.' read -r ioct1 ioct2 ioct3 ioct4 <<< "$ipad"
 IFS='.' read -r domi1 domi2 <<< "$domin"
 IFS='.' read -r oct1 oct2 oct3 oct4 <<< "$netw"
@@ -218,6 +222,10 @@ $soct  IN  PTR     ns.$domin.
 
 EOF
 sudo chown -R named:named /var/named/
+sudo nmcli con mod $inter ipv4.dns 127.0.0.1
+sudo nmcli con mod $inter ipv4.ignore-auto-dns yes
+sudo nmcli con down $inter
+sudo nmcli con up $inter
 ;;
 4)
 echo -e "${azul}A executar a Opção 4...${reset}"
